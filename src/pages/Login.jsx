@@ -1,32 +1,51 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { X, Copy, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import "./Login.css";
 
 export default function App() {
-  const [authState, setAuthState] = useState('auth'); 
+  const navigate = useNavigate();
+  const [authState, setAuthState] = useState('auth');
   const [isSignup, setIsSignup] = useState(true);
   const [formData, setFormData] = useState({
     teamName: '',
     email: '',
-    password: ''
+    password: '',
+    // Subteam is initially null/empty until selected on the next screen
+    subteam: null
   });
-  const [teamCode, setTeamCode] = useState('');
+  const [baseCode, setBaseCode] = useState('');
+  const [finalTeamCode, setFinalTeamCode] = useState('');
   const [enteredCode, setEnteredCode] = useState('');
   const [isCopied, setIsCopied] = useState(false);
 
-  const generateTeamCode = () => {
-    // Generate a random team code (e.g., ENIG-A7B2-C4D9)
+  // Function to generate the random part of the code
+  const generateRandomSegments = useCallback(() => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     const segment = () => Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-    return `ENIG-${segment()}-${segment()}`;
-  };
+    return `${segment()}-${segment()}`;
+  }, []);
+
+  // Function to update the final code whenever the subteam or base code changes
+  useEffect(() => {
+    if (baseCode && formData.subteam) {
+      // Final code is formed using the selected subteam prefix
+      setFinalTeamCode(`ENIG-${formData.subteam}-${baseCode}`);
+    } else if (baseCode) {
+        // If subteam is not selected yet, show a placeholder
+        setFinalTeamCode(`ENIG-X-${baseCode}`);
+    }
+  }, [baseCode, formData.subteam]);
+
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (isSignup) {
-      const code = generateTeamCode();
-      setTeamCode(code);
+      // 1. Generate the random part of the code immediately on sign up
+      const randomSegments = generateRandomSegments();
+      setBaseCode(randomSegments);
+      // 2. Transition to the 'signed-up' state (which now contains the dropdown)
       setAuthState('signed-up');
     } else {
       setAuthState('logged-in');
@@ -39,13 +58,22 @@ export default function App() {
     // Here you would verify the code
   };
 
-  const handleCopyCode = async () => {
-    await navigator.clipboard.writeText(teamCode);
-    setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 2000);
+  // UPDATED: Handle change in subteam selection
+  const handleSelectChange = (e) => {
+    setFormData(prev => ({
+      ...prev,
+      subteam: e.target.value
+    }));
   };
 
-  // Removed explicit type e: React.ChangeEvent<HTMLInputElement>
+  const handleCopyCode = async () => {
+    if (finalTeamCode) {
+        await navigator.clipboard.writeText(finalTeamCode);
+        setIsCopied(true);
+        setTimeout(() => setIsCopied(false), 2000);
+    }
+  };
+
   const handleInputChange = (e) => {
     setFormData({
       ...formData,
@@ -56,6 +84,8 @@ export default function App() {
   const toggleMode = () => {
     setIsSignup(!isSignup);
   };
+  
+  const subteamName = formData.subteam === 'A' ? 'Cipher' : (formData.subteam === 'B' ? 'Key' : 'Select a Subteam');
 
   return (
     <div className="min-h-screen bg-black flex items-center justify-center p-8 overflow-hidden">
@@ -78,6 +108,7 @@ export default function App() {
       </motion.div>
 
       {/* Animated red glow orbs in background */}
+      {/* ... (Glow Orbs unchanged) ... */}
       <motion.div
         className="fixed top-1/4 left-1/4 w-96 h-96 bg-red-500/5 rounded-full blur-[100px] pointer-events-none"
         animate={{
@@ -105,6 +136,7 @@ export default function App() {
       />
 
       {/* Scanline effect */}
+      {/* ... (Scanline unchanged) ... */}
       <motion.div
         className="fixed inset-0 pointer-events-none opacity-[0.03]"
         style={{
@@ -128,6 +160,7 @@ export default function App() {
         transition={{ duration: 0.5 }}
       >
         {/* ENIGMA Title - Centered above panel */}
+        {/* ... (Title unchanged) ... */}
         <motion.div
           className="text-center mb-8"
           initial={{ opacity: 0, y: -20 }}
@@ -184,12 +217,13 @@ export default function App() {
                   exit={{ opacity: 0, x: 10 }}
                   transition={{ duration: 0.3 }}
                 >
-                  {authState === 'signed-up' ? 'Team created' : authState === 'logged-in' ? 'Enter team code' : isSignup ? 'Create account' : 'Sign in'}
+                  {authState === 'signed-up' ? 'Select Subteam' : authState === 'logged-in' ? 'Enter team code' : isSignup ? 'Create account' : 'Sign in'}
                 </motion.h2>
               </AnimatePresence>
             </div>
             <motion.button
               type="button"
+              onClick={() => navigate('/dashboard')}
               className="w-10 h-10 flex items-center justify-center rounded-lg bg-zinc-800/50 hover:bg-zinc-700/50 border border-zinc-700/50 hover:border-red-500/30 text-zinc-400 hover:text-red-400 transition-all duration-300 hover:shadow-lg hover:shadow-red-500/10"
               aria-label="Close"
               whileHover={{ scale: 1.05, rotate: 90 }}
@@ -200,7 +234,7 @@ export default function App() {
           </div>
 
           <AnimatePresence mode="wait">
-            {/* Auth Form - shown when not logged in or signed up */}
+            {/* Auth Form (Subteam dropdown REMOVED) */}
             {authState === 'auth' && (
               <motion.div
                 key="auth-form"
@@ -210,30 +244,34 @@ export default function App() {
                 transition={{ duration: 0.4 }}
               >
                 <form onSubmit={handleSubmit} className="space-y-5">
-                  {/* Team name field - only shown in signup mode */}
+                  {/* Team name field */}
                   <AnimatePresence>
                     {isSignup && (
-                      <motion.div 
-                        className="space-y-2"
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        exit={{ opacity: 0, height: 0 }}
-                        transition={{ duration: 0.3 }}
-                      >
-                        <label htmlFor="teamName" className="block text-zinc-100">
-                          Team name
-                        </label>
-                        <input
-                          type="text"
-                          id="teamName"
-                          name="teamName"
-                          value={formData.teamName}
-                          onChange={handleInputChange}
-                          className="w-full px-4 py-3 bg-black/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-300 hover:border-zinc-600"
-                          placeholder="Enter your team name"
-                          required={isSignup}
-                        />
-                      </motion.div>
+                      <>
+                        {/* Team Name Input */}
+                        <motion.div 
+                          className="space-y-2"
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.3 }}
+                        >
+                          <label htmlFor="teamName" className="block text-zinc-100">
+                            Team name
+                          </label>
+                          <input
+                            type="text"
+                            id="teamName"
+                            name="teamName"
+                            value={formData.teamName}
+                            onChange={handleInputChange}
+                            className="w-full px-4 py-3 bg-black/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-300 hover:border-zinc-600"
+                            placeholder="Enter your team name"
+                            required={isSignup}
+                          />
+                        </motion.div>
+                        {/* Subteam Dropdown was HERE, now removed */}
+                      </>
                     )}
                   </AnimatePresence>
 
@@ -329,7 +367,7 @@ export default function App() {
               </motion.div>
             )}
 
-            {/* Team Code Display - shown after signup */}
+            {/* Team Code Display (with dropdown) - shown after sign up */}
             {authState === 'signed-up' && (
               <motion.div 
                 key="signed-up"
@@ -350,11 +388,42 @@ export default function App() {
                     ease: "easeInOut"
                   }}
                 >
-                  <p className="text-zinc-400">Your team code has been generated. Save this code - you'll need it to access your team:</p>
+                  <p className="text-zinc-400">Your account is ready. Select your **Subteam** below to finalize your **Team Code**:</p>
                   
+                  {/* NEW: Subteam Dropdown on the signed-up screen */}
+                  <motion.div 
+                    className="space-y-2"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <label htmlFor="subteam" className="block text-zinc-100">
+                      Choose Your Designation:
+                    </label>
+                    <div className="relative">
+                      <select
+                        id="subteam"
+                        name="subteam"
+                        value={formData.subteam || ''}
+                        onChange={handleSelectChange}
+                        className="appearance-none w-full px-4 py-3 bg-black/50 border border-zinc-700/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-300 hover:border-zinc-600 cursor-pointer pr-10"
+                        required
+                      >
+                        <option value="" disabled>-- Select a Subteam --</option>
+                        <option value="A">Subteam A (Cipher)</option>
+                        <option value="B">Subteam B (Key)</option>
+                      </select>
+                      {/* Custom caret for the select input */}
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-zinc-400">
+                          <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                      </div>
+                    </div>
+                  </motion.div>
+                  
+                  {/* Team Code Display */}
                   <div className="relative">
                     <motion.div 
-                      className="bg-zinc-950 border border-zinc-700/50 rounded-lg p-4 font-mono text-center"
+                      className={`bg-zinc-950 border rounded-lg p-4 font-mono text-center transition-colors duration-500 ${formData.subteam ? 'border-red-500/50' : 'border-zinc-700/50'}`}
                       initial={{ scale: 0.9, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
@@ -365,7 +434,7 @@ export default function App() {
                         animate={{ opacity: [0, 1, 1, 1] }}
                         transition={{ duration: 0.8, delay: 0.3 }}
                       >
-                        {teamCode.split('').map((char, index) => (
+                        {finalTeamCode.split('').map((char, index) => (
                           <motion.span
                             key={index}
                             initial={{ opacity: 0, y: -10 }}
@@ -381,10 +450,11 @@ export default function App() {
                     <motion.button
                       type="button"
                       onClick={handleCopyCode}
-                      className="absolute top-2 right-2 p-2 bg-zinc-800/80 hover:bg-zinc-700/80 rounded-md text-zinc-400 hover:text-red-400 transition-all duration-300 border border-zinc-700/50"
+                      disabled={!formData.subteam} // Disable until subteam is selected
+                      className={`absolute top-2 right-2 p-2 rounded-md transition-all duration-300 border border-zinc-700/50 ${formData.subteam ? 'bg-zinc-800/80 hover:bg-zinc-700/80 text-zinc-400 hover:text-red-400' : 'bg-zinc-800/50 text-zinc-600 cursor-not-allowed'}`}
                       aria-label="Copy code"
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
+                      whileHover={formData.subteam ? { scale: 1.1 } : {}}
+                      whileTap={formData.subteam ? { scale: 0.9 } : {}}
                     >
                       <AnimatePresence mode="wait">
                         {isCopied ? (
@@ -410,32 +480,41 @@ export default function App() {
                     </motion.button>
                   </div>
 
+                  {/* Indication of the prefix */}
                   <motion.div 
-                    className="bg-red-950/20 border border-red-500/20 rounded-lg p-3"
+                    className={`border rounded-lg p-3 transition-colors duration-500 ${formData.subteam ? 'bg-red-950/20 border-red-500/20' : 'bg-yellow-950/20 border-yellow-500/20'}`}
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 1.2 }}
+                    transition={{ delay: 0.7 }}
                   >
-                    <p className="text-red-400/80 text-sm">⚠️ Keep this code secure. Anyone with this code can access your team.</p>
+                    <p className={`text-sm ${formData.subteam ? 'text-red-400/80' : 'text-yellow-400/80 font-bold'}`}>
+                      {formData.subteam 
+                        ? `✅ Final Team Code generated. You are Subteam ${formData.subteam} (${subteamName}).`
+                        : `⚠️ Select a Subteam above. Your current code prefix is a placeholder (X).`
+                      }
+                    </p>
                   </motion.div>
+
                 </motion.div>
 
                 <motion.button
                   type="button"
                   onClick={() => setAuthState('auth')}
-                  className="w-full py-3 bg-red-600 hover:bg-red-500 text-white rounded-lg transition-all duration-300 shadow-lg shadow-red-500/20 hover:shadow-red-500/40 hover:shadow-xl"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
+                  disabled={!formData.subteam} // Disable until subteam is selected
+                  className={`w-full py-3 text-white rounded-lg transition-all duration-300 shadow-lg ${formData.subteam ? 'bg-red-600 hover:bg-red-500 shadow-red-500/20 hover:shadow-red-500/40' : 'bg-zinc-700/50 cursor-not-allowed shadow-none'}`}
+                  whileHover={formData.subteam ? { scale: 1.02 } : {}}
+                  whileTap={formData.subteam ? { scale: 0.98 } : {}}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 1.3 }}
                 >
-                  Continue to dashboard
+                  {formData.subteam ? 'Continue to dashboard' : 'Select Subteam to Continue'}
                 </motion.button>
               </motion.div>
             )}
 
             {/* Team Code Input - shown after login */}
+            {/* ... (Login form unchanged) ... */}
             {authState === 'logged-in' && (
               <motion.div 
                 key="logged-in"
@@ -471,7 +550,7 @@ export default function App() {
                       value={enteredCode}
                       onChange={(e) => setEnteredCode(e.target.value.toUpperCase())}
                       className="w-full px-4 py-3 bg-black/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-300 hover:border-zinc-600 font-mono tracking-wider text-center"
-                      placeholder="ENIG-XXXX-XXXX"
+                      placeholder="ENIG-X-XXXX-XXXX"
                       required
                       pattern="[A-Z0-9-]+"
                     />
@@ -510,6 +589,7 @@ export default function App() {
         </motion.div>
 
         {/* Decorative corner accents with animation */}
+        {/* ... (Corner accents unchanged) ... */}
         <motion.div 
           className="absolute -top-2 -left-2 w-8 h-8 border-l-2 border-t-2 border-red-500/30 rounded-tl-lg"
           animate={{
